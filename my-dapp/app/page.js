@@ -4,7 +4,8 @@ import styles from './page.module.css'
 import Head from 'next/head'
 import { useState, useRef, useEffect } from 'react'
 import Web3Modal from "web3modal";
-import {BigNumber, ethers, providers, utils} from "ethers";
+import {BigNumber, Contract, ethers, providers, utils} from "ethers";
+import {TOKEN_CONTRACT_ADDRESS, TOKEN_CONTRACT_ABI, NFT_CONTRACT_ADDRESS, NFT_CONTRACT_ABI} from "../constants";
 
 export default function Home() {
   const zero = BigNumber.from(0);
@@ -13,6 +14,7 @@ export default function Home() {
   const [tokensMinted ,setTokensMinted] = useState(zero);
   const [balanceOfCryptoDevToken, setBalanceOfCryptoDevToken] = useState(zero);
   const [tokenAmount, setTokenAmount] = useState(zero);
+  const [tokensToBeClaimed, setTokensToBeClaimed] = useState(zero);
   const connectWallet = async() =>{
     try{
       await getSignerOrProvider();
@@ -32,12 +34,14 @@ export default function Home() {
       throw new Error("Change the network to Sepolia");
     }
     if(needSigner){
-      const signer = await web3Provider.getSigner();
+      const signer = web3Provider.getSigner();
       return signer;
     }
 
     return web3Provider;
   }
+  
+  
   useEffect(()=>{
     if(!walletConnect){
       web3ModalRef.current = new Web3Modal({
@@ -48,11 +52,92 @@ export default function Home() {
       connectWallet();
     }
   }, [walletConnect]);
-  const mintCryptoDevToken = async()=>{
+  
+  
+  const mintCryptoDevToken = async(amount)=>{
     const signer = await getSignerOrProvider(true);
+    const tokenContract = new Contract(
+      TOKEN_CONTRACT_ADDRESS,
+      TOKEN_CONTRACT_ABI,
+      signer
+    )
+    const value = amount * 0.001;
+    const tx = await tokenContract.mint(amount, {
+      value: utils.parseEther(value.toString())
+    });
+    setLoading(true);
+    await tx.wait();
+    setLoading(false);
+    window.alert("You have sucessfully minted a CryptoDev Token");
 
   }
+
+  const getTokenstoBeClaimed = async()=>{
+    try{
+      const provider = await getSignerOrProvider(true);
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        provider
+      );
+  
+      const nftContract = new Contract(
+        NFT_CONTRACT_ADDRESS,
+        NFT_CONTRACT_ABI,
+        provider
+      );
+      const signer = await getSignerOrProvider(true);
+      const address = await signer.getAddress();
+      
+      const balance = await nftContract.balanceOf(address);
+      if(balance === zero){
+        setTokensToBeClaimed(zero);
+      }
+      
+      
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+  const claimTokens = async()=>{
+    try{
+      const provider = await getSignerOrProvider();
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        provider
+      );
+      const tx = await tokenContract.claim();
+      setLoading(true);
+      await tx.wait();
+      setLoading(false);
+    }catch(err){
+      console.error(err);
+    }
+  }
+
   function renderButtons(){
+    if(setLoading){
+      return(
+        <div>
+          <button className={styles.button}>Loading...</button>
+        </div>
+      );
+    }
+
+    if(tokensToBeClaimed>0){
+      return(
+      <div>
+        <div className={styles.description}>
+          {tokensToBeClaimed} Tokens can be Claimed!
+        </div>
+        <button className={styles.button} onClick={claimTokens}>
+          Claim
+        </button>
+      </div>
+      );
+    }
     return(
       <div style={{display:"flex-col"}}>
         <div>
@@ -62,7 +147,7 @@ export default function Home() {
           onChange={(e)=>{setTokenAmount(BigNumber.from(e.target.value))}} 
           className={styles.input}/>
         </div>
-        <button className={styles.button} onClick={mintCryptoDevToken}>
+        <button className={styles.button} onClick={mintCryptoDevToken(tokenAmount)}>
           Mint Tokens
         </button>
       </div>
