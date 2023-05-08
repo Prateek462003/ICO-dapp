@@ -15,6 +15,8 @@ export default function Home() {
   const [balanceOfCryptoDevToken, setBalanceOfCryptoDevToken] = useState(zero);
   const [tokenAmount, setTokenAmount] = useState(zero);
   const [tokensToBeClaimed, setTokensToBeClaimed] = useState(zero);
+  const [loading, setLoading] = useState(false);
+  const [isOwner, setIsOwner ] = useState(false);
   const connectWallet = async() =>{
     try{
       await getSignerOrProvider();
@@ -53,25 +55,62 @@ export default function Home() {
     }
   }, [walletConnect]);
   
+
   
   const mintCryptoDevToken = async(amount)=>{
-    const signer = await getSignerOrProvider(true);
-    const tokenContract = new Contract(
-      TOKEN_CONTRACT_ADDRESS,
-      TOKEN_CONTRACT_ABI,
-      signer
-    )
-    const value = amount * 0.001;
-    const tx = await tokenContract.mint(amount, {
-      value: utils.parseEther(value.toString())
-    });
-    setLoading(true);
-    await tx.wait();
-    setLoading(false);
-    window.alert("You have sucessfully minted a CryptoDev Token");
-
+    try{
+      const signer = await getSignerOrProvider(true);
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        signer
+      )
+      const value = amount * 0.001;
+      const tx = await tokenContract.mint(amount, {
+        value: utils.parseEther(value.toString())
+      });
+      setLoading(true);
+      await tx.wait();
+      setLoading(false);
+      window.alert("You have sucessfully minted a CryptoDev Token");
+    }catch(err){
+      console.error(err);
+    }
+    await getTokenstoBeClaimed();
+    await getTotalTokensMinted();
+    await getbalanceOfCryptoDevToken();
   }
-
+  const getTotalTokensMinted = async()=>{
+    try{
+      const provider = await getSignerOrProvider();
+      const tokenContract = await Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        provider
+      );
+  
+      const _totalTokensMinted = await tokenContract.totalSupply();
+      setTokensMinted(BigNumber.from(_totalTokensMinted));
+    }catch(err){
+      console.error(err);
+    }
+  }
+  const getbalanceOfCryptoDevToken = async()=>{
+    try{
+      const provider = await getSignerOrProvider();
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        provider
+      );
+      const signer = await getSignerOrProvider(true);
+      const address = await signer.getAddress();
+      const balance = await tokenContract.balanceOf(address);
+      setBalanceOfCryptoDevToken(BigNumber.from(balance));
+    }catch(err){
+      console.error(err);
+  }
+}
   const getTokenstoBeClaimed = async()=>{
     try{
       const provider = await getSignerOrProvider(true);
@@ -94,12 +133,60 @@ export default function Home() {
         setTokensToBeClaimed(zero);
       }
       
+      for(var i=0;i<balance; i++){
+        const tokenId = nftContract.tokenOfOwnerByIndex(address, i);
+        const claimed = tokenContract.tokenIdsClaimed();
+        if(!claimed){
+          amount++;
+        }
+      }
+
+      setTokensToBeClaimed(BigNumber.from(amount));
       
-    }catch(err){
+    }
+    catch(err){
       console.error(err);
     }
   }
 
+  const getOwner = async()=>{
+    try{
+      const provider = await getProviderOrSigner();
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        provider
+      );
+      const signer = await getProviderOrSigner(true);
+      const address = await signer.getAddress();
+
+      const _owner = await tokenContract.onwer();
+      if(_owner === address){
+        setIsOwner(true);
+      }
+    }catch(err){
+      console.error(err);
+    }
+  }
+  const withdraw = async()=>{
+    try{
+      const signer = await getSignerOrProvider(true);
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_CONTRACT_ABI,
+        signer
+      );
+      const tx = await tokenContract.withraw();
+      setLoading(true);
+      await tx.wait();
+      setLoading(false);
+      getOwner();
+    }catch(err){
+      console.error(err);
+    }
+
+
+  }
   const claimTokens = async()=>{
     try{
       const provider = await getSignerOrProvider();
@@ -112,13 +199,16 @@ export default function Home() {
       setLoading(true);
       await tx.wait();
       setLoading(false);
+      await getTokenstoBeClaimed();
+      await getTotalTokensMinted();
+      await getbalanceOfCryptoDevToken();
     }catch(err){
       console.error(err);
     }
   }
 
   function renderButtons(){
-    if(setLoading){
+    if(loading){
       return(
         <div>
           <button className={styles.button}>Loading...</button>
@@ -157,34 +247,57 @@ export default function Home() {
   }
   return (
     <>
+      <div>
       <Head>
-        <title>CryptoDevs-ICO</title>
+        <title>Crypto Devs</title>
+        <meta name="description" content="ICO-Dapp" />
+        <link rel="icon" href="/favicon.ico" />
       </Head>
       <div className={styles.main}>
-        <div> 
-          <h1 className={styles.tittle}>Welcome to Crypto Devs Token ICO</h1>
+        <div>
+          <h1 className={styles.title}>Welcome to Crypto Devs ICO!</h1>
           <div className={styles.description}>
-            You can Mint Crypto Devs Token here!!
+            You can claim or mint Crypto Dev tokens here
           </div>
-          {walletConnect?
-            (
-              <div>
-                <div className={styles.description}>
-                  Overall {utils.formatEther(balanceOfCryptoDevToken)}/10000 tokens have been minted till now!
-                </div>
+          {walletConnect? (
+            <div>
+              <div className={styles.description}>
+                {/* Format Ether helps us in converting a BigNumber to string */}
+                You have minted {utils.formatEther(balanceOfCryptoDevToken)} Crypto
+                Dev Tokens
               </div>
-            ):
-            (
-              <div>
-                <div className={styles.description}>
-                  You have minted {utils.formatEther(tokensMinted)} tokens till now!
-                </div>
+              <div className={styles.description}>
+                {/* Format Ether helps us in converting a BigNumber to string */}
+                Overall {utils.formatEther(tokensMinted)}/10000 have been minted!!!
               </div>
-            )
-          }
-          {renderButtons()}
+              {renderButtons()}
+              {/* Display additional withdraw button if connected wallet is owner */}
+                {isOwner ? (
+                  <div>
+                  {loading ? <button className={styles.button}>Loading...</button>
+                           : <button className={styles.button} onClick={withdraw}>
+                               Withdraw Coins
+                             </button>
+                  }
+                  </div>
+                  ) : ("")
+                }
+            </div>
+          ) : (
+            <button onClick={connectWallet} className={styles.button}>
+              Connect your wallet
+            </button>
+          )}
+        </div>
+        <div>
+          <img className={styles.image} src="./0.svg" />
         </div>
       </div>
+
+      <footer className={styles.footer}>
+        Made with &#10084; by Crypto Devs
+      </footer>
+    </div>
     </>
   )
 }
